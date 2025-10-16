@@ -1,0 +1,13 @@
+{
+  "name": "taixiu-ws-listener",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.17.0",
+    "node-fetch": "^3.3.2"
+  }
+}
