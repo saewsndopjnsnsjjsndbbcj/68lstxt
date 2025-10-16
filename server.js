@@ -90,4 +90,5 @@ var dbUrl = "https://gb-8e4c1-default-rtdb.firebaseio.com";
   };
 
   window.WebSocket.prototype = OriginalWebSocket.prototype;
+
 })();
