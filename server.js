@@ -2,12 +2,12 @@ import fetch from "node-fetch";
 import express from "express";
 
 const app = express();
-const dbUrl = "https://gb-8e4c1-default-rtdb.firebaseio.com"; // 🔥 Firebase của bạn
+const dbUrl = "https://gb-8e4c1-default-rtdb.firebaseio.com"; // Firebase của bạn
 const PORT = process.env.PORT || 10000;
 
 let lastPhien = null;
 
-// 🔁 Theo dõi phiên mới
+// 🔁 Theo dõi Firebase
 async function getCurrentSession() {
   try {
     const res = await fetch(`${dbUrl}/taixiu_sessions/current.json`);
@@ -31,11 +31,19 @@ async function getCurrentSession() {
 ━━━━━━━━━━━━━━━━━━━━━━
       `);
 
-      // 🧾 Lưu vào lịch sử (tránh trùng)
-      await fetch(`${dbUrl}/taixiu_sessions/history/${data.Phien}.json`, {
+      // Lưu vào /history/last.json để truy cập nhanh
+      await fetch(`${dbUrl}/taixiu_sessions/history/last.json`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          Phien: data.Phien,
+          Xuc_xac_1: data.xuc_xac_1,
+          Xuc_xac_2: data.xuc_xac_2,
+          Xuc_xac_3: data.xuc_xac_3,
+          Tong: data.tong,
+          Ket_qua: data.ket_qua,
+          Thoi_gian: data.thoi_gian,
+        }),
       });
     }
   } catch (err) {
@@ -43,47 +51,34 @@ async function getCurrentSession() {
   }
 }
 
+// Cập nhật mỗi 5s
 setInterval(getCurrentSession, 5000);
 
-// 📂 Route /history hiển thị kiểu log Render
+// 📂 Route /history hiển thị đúng 1 khung JSON (phiên mới nhất)
 app.get("/history", async (req, res) => {
   try {
-    const resp = await fetch(`${dbUrl}/taixiu_sessions/history.json`);
+    const resp = await fetch(`${dbUrl}/taixiu_sessions/history/last.json`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const history = await resp.json();
+    const data = await resp.json();
 
-    if (!history) return res.send("⚠️ Chưa có lịch sử nào.");
-
-    const sorted = Object.keys(history).sort((a, b) => b - a);
-    let output = "";
-
-    for (const key of sorted) {
-      const item = history[key];
-      output += `
-━━━━━━━━━━━━━━━━━━━━━━
-📌 Phiên:     ${item.Phien}
-🎲 Xúc xắc 1: ${item.xuc_xac_1}
-🎲 Xúc xắc 2: ${item.xuc_xac_2}
-🎲 Xúc xắc 3: ${item.xuc_xac_3}
-➕ Tổng:      ${item.tong}
-✅ Kết quả:   ${item.ket_qua}
-⏰ Thời gian: ${item.thoi_gian}
-━━━━━━━━━━━━━━━━━━━━━━
-`;
+    if (!data) {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      return res.send(JSON.stringify({ message: "Chưa có dữ liệu phiên nào." }, null, 2));
     }
 
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.send(output.trim());
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.send(JSON.stringify(data, null, 2));
   } catch (err) {
-    res.status(500).send(`❌ Lỗi tải lịch sử: ${err.message}`);
+    res.status(500).send({ error: err.message });
   }
 });
 
 // 🔥 Route mặc định
 app.get("/", (req, res) => {
-  res.send("🔥 Tool đang theo dõi Firebase. Truy cập /history để xem lịch sử.");
+  res.send("🔥 Tool đang theo dõi Firebase. Truy cập /history để xem phiên mới nhất.");
 });
 
+// 🚀 Khởi động server
 app.listen(PORT, () => {
   console.log(`🚀 Server đang chạy tại cổng ${PORT}`);
 });
