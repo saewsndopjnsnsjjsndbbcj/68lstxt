@@ -1,58 +1,65 @@
-var dbUrl = "https://gb-8e4c1-default-rtdb.firebaseio.com";
+import express from "express";
+import WebSocket from "ws";
+import fetch from "node-fetch";
+import { TextDecoder } from "util";
 
-(function () {
-  var OriginalWebSocket = window.WebSocket;
+const dbUrl = "https://gb-8e4c1-default-rtdb.firebaseio.com";
+const PORT = process.env.PORT || 10000;
 
-  window.WebSocket = function (url, protocols) {
-    var ws = protocols ? new OriginalWebSocket(url, protocols) : new OriginalWebSocket(url);
+const app = express();
+app.get("/", (req, res) => {
+  res.send("✅ Server Node.js đang hoạt động trên Render!");
+});
+app.listen(PORT, () => {
+  console.log(`🚀 Server đang chạy tại cổng ${PORT}`);
+});
 
-    ws.addEventListener("message", async function (event) {
-      try {
-        var text;
+console.log("🟢 Đang khởi động WebSocket listener...");
 
-        // Giải mã dữ liệu
-        if (event.data instanceof ArrayBuffer) {
-          text = new TextDecoder("utf-8").decode(event.data);
-        } else if (typeof event.data === "string") {
-          text = event.data;
-        } else {
-          return;
-        }
+// ================== PHẦN XỬ LÝ WEBSOCKET ==================
+const targetUrl = "wss://example.com/endpoint"; // <--- Thay bằng URL WebSocket thật của bạn
 
-        // Kiểm tra nếu chứa start hoặc end game
-        if (text.includes("mnmdsbgamestart") || text.includes("mnmdsbgameend")) {
-          var dicesMatch = text.match(/\{(\d+)\s*-\s*(\d+)\s*-\s*(\d+)\}/);
-          if (!dicesMatch) return;
+const ws = new WebSocket(targetUrl);
 
-          var dice1 = parseInt(dicesMatch[1], 10);
-          var dice2 = parseInt(dicesMatch[2], 10);
-          var dice3 = parseInt(dicesMatch[3], 10);
+ws.on("open", () => {
+  console.log("🔗 Đã kết nối tới WebSocket server:", targetUrl);
+});
 
-          if (isNaN(dice1) || isNaN(dice2) || isNaN(dice3)) return;
+ws.on("message", async (data) => {
+  try {
+    let text;
+    if (data instanceof Buffer) {
+      text = new TextDecoder("utf-8").decode(data);
+    } else if (typeof data === "string") {
+      text = data;
+    } else {
+      return;
+    }
 
-          var total = dice1 + dice2 + dice3;
-          var result = total > 10 ? "Tài" : "Xỉu";
+    if (text.includes("mnmdsbgamestart") || text.includes("mnmdsbgameend")) {
+      const dicesMatch = text.match(/\{(\d+)\s*-\s*(\d+)\s*-\s*(\d+)\}/);
+      if (!dicesMatch) return;
 
-          var sessionMatch = text.match(/#(\d+)[_\-]/);
-          var sessionNumber = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
-          if (!sessionNumber) return;
+      const [_, d1, d2, d3] = dicesMatch;
+      const total = +d1 + +d2 + +d3;
+      const result = total > 10 ? "Tài" : "Xỉu";
 
-          var now = new Date();
-          var timeString = now.toLocaleString("vi-VN", { hour12: false });
+      const sessionMatch = text.match(/#(\d+)[_\-]/);
+      const sessionNumber = sessionMatch ? parseInt(sessionMatch[1], 10) : null;
+      if (!sessionNumber) return;
 
-          // Payload chuẩn
-          var payload = {
-            "Phien": sessionNumber,
-            "xuc_xac_1": dice1,
-            "xuc_xac_2": dice2,
-            "xuc_xac_3": dice3,
-            "tong": total,
-            "ket_qua": result,
-            "thoi_gian": timeString
-          };
+      const now = new Date();
+      const payload = {
+        "Phien": sessionNumber,
+        "xuc_xac_1": +d1,
+        "xuc_xac_2": +d2,
+        "xuc_xac_3": +d3,
+        "tong": total,
+        "ket_qua": result,
+        "thoi_gian": now.toLocaleString("vi-VN", { hour12: false }),
+      };
 
-          // In ra console cho đẹp
-          console.log(`
+      console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━
 📌 Phiên:     ${payload.Phien}
 🎲 Xúc xắc 1: ${payload.xuc_xac_1}
@@ -62,33 +69,30 @@ var dbUrl = "https://gb-8e4c1-default-rtdb.firebaseio.com";
 ✅ Kết quả:   ${payload.ket_qua}
 ⏰ Thời gian: ${payload.thoi_gian}
 ━━━━━━━━━━━━━━━━━━━━━━
-          `);
+      `);
 
-          try {
-            // Luôn ghi đè vào 1 node duy nhất "current"
-            let res = await fetch(dbUrl + "/taixiu_sessions/current.json", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
+      const res = await fetch(`${dbUrl}/taixiu_sessions/current.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-            if (res.ok) {
-              console.log("✅ Đã ghi đè phiên mới vào Firebase (current)");
-            } else {
-              console.error("❌ Lỗi lưu phiên:", res.status);
-            }
-          } catch (err) {
-            console.error("❌ Lỗi fetch lưu phiên:", err);
-          }
-        }
-      } catch (err) {
-        console.error("❌ Lỗi khi xử lý WebSocket:", err);
+      if (res.ok) {
+        console.log("✅ Đã ghi đè phiên mới vào Firebase (current)");
+      } else {
+        console.error("❌ Lỗi lưu phiên:", res.status);
       }
-    });
+    }
+  } catch (err) {
+    console.error("❌ Lỗi khi xử lý dữ liệu WS:", err);
+  }
+});
 
-    return ws;
-  };
+ws.on("close", () => {
+  console.log("⚠️ WebSocket bị ngắt, sẽ thử kết nối lại sau 5s...");
+  setTimeout(() => process.exit(1), 5000); // Render sẽ tự restart app
+});
 
-  window.WebSocket.prototype = OriginalWebSocket.prototype;
-
-})();
+ws.on("error", (err) => {
+  console.error("❌ Lỗi WebSocket:", err);
+});
