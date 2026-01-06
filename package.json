@@ -1,13 +1,17 @@
 {
-  "name": "taixiu-server",
+  "name": "taixiu-api",
   "version": "1.0.0",
-  "description": "Read latest Tai Xiu session from Firebase",
-  "type": "module",
+  "description": "API lay phien tai xiu moi nhat tu Firebase",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node server.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "express": "^4.19.2",
+    "axios": "^1.6.8"
   }
 }
