@@ -1,41 +1,65 @@
-import fetch from "node-fetch";
+const express = require('express');
+const axios = require('axios');
+const app = express();
 
-const DB_URL = "https://api-68gb-default-rtdb.firebaseio.com";
-const PATH = "taixiu_sessions";
+const PORT = process.env.PORT || 3000;
 
-/**
- * Lấy phiên mới nhất từ Firebase
- */
-async function getLatestSession() {
+// Firebase API
+const SOURCE_API_URL =
+  'https://gbmd5-4a69a-default-rtdb.asia-southeast1.firebasedatabase.app/taixiu_sessions.json';
+
+// Lấy phiên mới nhất
+app.get('/api/lxk', async (req, res) => {
   try {
-    const url = `${DB_URL}/${PATH}.json?orderBy="$key"&limitToLast=1`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const response = await axios.get(SOURCE_API_URL, {
+      timeout: 10000
+    });
 
-    if (!data) {
-      console.log("❌ Chưa có dữ liệu");
-      return;
+    const data = response.data;
+
+    if (!data || typeof data !== 'object') {
+      return res.status(500).json({ error: 'Dữ liệu Firebase không hợp lệ' });
     }
 
-    // Firebase trả về object → lấy key đầu tiên
-    const latestKey = Object.keys(data)[0];
-    const latest = data[latestKey];
+    // Object -> Array
+    const list = Object.values(data)
+      .filter(item => item.type === 'end' && item.phien)
+      .sort((a, b) => Number(b.phien) - Number(a.phien));
 
-    console.log("🔥 PHIÊN MỚI NHẤT");
-    console.log("Phiên:", latestKey);
-    console.log("Xúc xắc:", latest.d1, "-", latest.d2, "-", latest.d3);
-    console.log("Tổng:", latest.tong);
-    console.log("Kết quả:", latest.ketqua);
-    console.log("Thời gian:", new Date(latest.time).toLocaleString());
+    if (list.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy phiên end' });
+    }
 
-    return latest;
+    const latest = list[0];
+
+    // Chuẩn hóa output
+    const result = {
+      Phien: latest.phien,
+      Xuc_xac_1: latest.xuc_xac_1,
+      Xuc_xac_2: latest.xuc_xac_2,
+      Xuc_xac_3: latest.xuc_xac_3,
+      Tong: latest.tong,
+      Ket_qua: latest.ket_qua,
+      Time: latest.time,
+      id_nguon: '@firebase_taixiu'
+    };
+
+    res.json(result);
+
   } catch (err) {
-    console.error("❌ Lỗi đọc Firebase:", err.message);
+    console.error('❌ Lỗi API:', err.message);
+    res.status(503).json({
+      error: 'Không lấy được dữ liệu Firebase',
+      details: err.message
+    });
   }
-}
+});
 
-// 👉 TEST
-getLatestSession();
+// Trang gốc
+app.get('/', (req, res) => {
+  res.send('API Tài Xỉu Firebase — dùng /api/lxk');
+});
 
-// 👉 Nếu b muốn đọc liên tục mỗi X giây
-// setInterval(getLatestSession, 3000);
+app.listen(PORT, () => {
+  console.log(`✅ Server chạy tại http://localhost:${PORT}`);
+});
